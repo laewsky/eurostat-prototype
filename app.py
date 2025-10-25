@@ -221,9 +221,15 @@ def process_ai_response(response_text, df):
     # Optionally inject results inline
     for code, _, result in execution_results:
         if isinstance(result, (int, float)):
+            # Fix: Format the number first, then insert
+            if isinstance(result, float):
+                formatted_result = f"{result:,.2f}"
+            else:
+                formatted_result = f"{result:,}"
+            
             formatted_response = formatted_response.replace(
                 f"```python\n{code}\n```",
-                f"```python\n{code}\n```\n**Result:** `{result:,.2f if isinstance(result, float) else result:,}`"
+                f"```python\n{code}\n```\n**Result:** `{formatted_result}`"
             )
     
     return formatted_response
