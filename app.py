@@ -135,7 +135,7 @@ def load_and_process_data():
         processing_log.append(f"Found {len(value_rows)} VALUE_IN_EUROS rows")
         
         unit_value_rows = []
-        skipped_records = []
+        skipped_count = 0
         
         for _, value_row in value_rows.iterrows():
             # Find corresponding CUM_VALUE
@@ -147,44 +147,22 @@ def load_and_process_data():
                 (df['indicators'] == 'CUM_VALUE')
             ]
             
-            if cum_value_row.empty:
-                skipped_records.append({
-                    'reason': 'No matching CUM_VALUE found',
-                    'reporter': value_row['reporter'],
-                    'partner': value_row['partner'],
-                    'product': value_row['product'],
-                    'time_period': value_row['time_period']
-                })
-            elif cum_value_row.iloc[0]['obs_value'] == 0:
-                skipped_records.append({
-                    'reason': 'CUM_VALUE is zero (division by zero avoided)',
-                    'reporter': value_row['reporter'],
-                    'partner': value_row['partner'],
-                    'product': value_row['product'],
-                    'time_period': value_row['time_period'],
-                    'value_in_euros': value_row['obs_value']
-                })
+            new_row = value_row.copy()
+            new_row['indicators'] = 'UNIT_VALUE'
+            
+            if cum_value_row.empty or cum_value_row.iloc[0]['obs_value'] == 0:
+                # Set to NaN/0 instead of skipping
+                new_row['obs_value'] = 0  # or use float('nan')
+                skipped_count += 1
             else:
-                new_row = value_row.copy()
-                new_row['indicators'] = 'UNIT_VALUE'
                 new_row['obs_value'] = value_row['obs_value'] / cum_value_row.iloc[0]['obs_value']
-                unit_value_rows.append(new_row)
+            
+            unit_value_rows.append(new_row)
         
         if unit_value_rows:
             df = pd.concat([df, pd.DataFrame(unit_value_rows)], ignore_index=True)
-            processing_log.append(f"Added {len(unit_value_rows)} UNIT_VALUE rows")
-        
-        if skipped_records:
-            processing_log.append(f"⚠️ Skipped {len(skipped_records)} UNIT_VALUE calculations:")
-            for record in skipped_records:
-                processing_log.append(f"  - {record}")
-        
-        processing_log.append(f"FINAL: {len(df)} total rows")
-        
-        # Store log and skipped records in session state
-        st.session_state.processing_log = processing_log
-        st.session_state.skipped_unit_values = skipped_records
-
+            processing_log.append(f"Added {len(unit_value_rows)} UNIT_VALUE rows ({skipped_count} with zero/missing volume)")
+            
         return df
     
     except Exception as e:
