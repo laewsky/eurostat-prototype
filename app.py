@@ -69,7 +69,9 @@ st.markdown("""
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     """Load and process Eurostat data"""
-    url = "https://ec.europa.eu/eurostat/api/comext/dissemination/sdmx/3.0/data/dataflow/ESTAT/ds-045409/1.0/*.*.*.*.*.*?c[freq]=M&c[reporter]=AT,BE,BG,CY,CZ,DE,DK,EE,ES,FI,FR,GB,GR,HR,HU,IE,IT,LT,LU,LV,MT,NL,PL,PT,RO,SE,SI,SK&c[partner]=CN,EG,SA,AE,MA,DZ,JP,KR,IN&c[product]=440711,440712,440713,440714,440719&c[flow]=2&c[indicators]=QUANTITY_IN_100KG,VALUE_IN_EUROS&c[TIME_PERIOD]=2024-01,2024-02,2024-03,2024-04,2024-05,2024-06,2024-07,2024-08,2024-09,2024-10,2024-11,2024-12,2025-01,2025-02,2025-03,2025-04,2025-05,2025-06,2025-07,2025-08&compress=false&format=csvdata&formatVersion=2.0"
+    url = "https://ec.europa.eu/eurostat/api/comext/dissemination/sdmx/3.0/data/dataflow/ESTAT/ds-045409/1.0/*.*.*.*.*.*?c[freq]=M&c[reporter]=AT,BE,BG,CY,CZ,DE,DK,EE,ES,FI,FR,GB,GR,HR,HU,IE,IT,LT,LU,LV,MT,NL,PL,PT,RO,SE,SI,SK&c[partner]=CN,EG,SA,AE,MA,DZ,JP,KR,IN&c[product]=440711,440712,440713,440714,440719&c[flow]=2&c[indicators]=QUANTITY_IN_100KG,VALUE_IN_EUROS&c[TIME_PERIOD]=2024-01,2024-02,2024-03,2024-04,2024-05,2024-06,2024-07,2024-08,2025-01,2025-02,2025-03,2025-04,2025-05,2025-06,2025-07,2025-08&compress=false&format=csvdata&formatVersion=2.0"
+    
+    processing_log = []
     
     try:
         response = requests.get(url, timeout=30)
@@ -77,13 +79,18 @@ def load_and_process_data():
         
         # Read CSV
         df = pd.read_csv(StringIO(response.text))
+        processing_log.append(f"Raw CSV loaded: {len(df)} rows, {len(df.columns)} columns")
         
         # Make column names case-insensitive (lowercase)
         df.columns = df.columns.str.lower()
         
         # Keep only needed columns
         needed_cols = ['reporter', 'partner', 'product', 'indicators', 'time_period', 'obs_value']
-        df = df[[col for col in needed_cols if col in df.columns]]
+        available_cols = [col for col in needed_cols if col in df.columns]
+        processing_log.append(f"Available columns: {available_cols}")
+        
+        df = df[available_cols]
+        processing_log.append(f"After column filtering: {len(df)} rows")
         
         # Clean and standardize data
         df['reporter'] = df['reporter'].astype(str).str.strip().str.upper()
@@ -94,7 +101,11 @@ def load_and_process_data():
         df['obs_value'] = pd.to_numeric(df['obs_value'], errors='coerce').fillna(0)
         
         # Remove any rows with missing critical data
+        before_dropna = len(df)
         df = df.dropna(subset=['reporter', 'partner', 'product', 'indicators', 'time_period'])
+        after_dropna = len(df)
+        processing_log.append(f"Dropped {before_dropna - after_dropna} rows with missing data")
+        processing_log.append(f"After cleaning: {len(df)} rows")
         
         # Product multipliers for CUM_VALUE calculation
         multipliers = {
@@ -107,6 +118,8 @@ def load_and_process_data():
         
         # Add CUM_VALUE rows (cubic meters)
         quantity_rows = df[df['indicators'] == 'QUANTITY_IN_100KG'].copy()
+        processing_log.append(f"Found {len(quantity_rows)} QUANTITY_IN_100KG rows")
+        
         quantity_rows['indicators'] = 'CUM_VALUE'
         quantity_rows['obs_value'] = quantity_rows.apply(
             lambda row: row['obs_value'] * multipliers.get(str(row['product']), 0.2),
@@ -115,9 +128,12 @@ def load_and_process_data():
         
         # Concatenate to have CUM_VALUE available
         df = pd.concat([df, quantity_rows], ignore_index=True)
+        processing_log.append(f"After adding CUM_VALUE: {len(df)} rows")
         
         # Add UNIT_VALUE rows (price per cubic meter)
         value_rows = df[df['indicators'] == 'VALUE_IN_EUROS'].copy()
+        processing_log.append(f"Found {len(value_rows)} VALUE_IN_EUROS rows")
+        
         unit_value_rows = []
         
         for _, value_row in value_rows.iterrows():
@@ -138,12 +154,19 @@ def load_and_process_data():
         
         if unit_value_rows:
             df = pd.concat([df, pd.DataFrame(unit_value_rows)], ignore_index=True)
+            processing_log.append(f"Added {len(unit_value_rows)} UNIT_VALUE rows")
+        
+        processing_log.append(f"FINAL: {len(df)} total rows")
+        
+        # Store log in session state for debugging
+        st.session_state.processing_log = processing_log
         
         return df
     
     except Exception as e:
         st.error(f"❌ Error loading data: {str(e)}")
-        return None
+        st.error(f"Processing log: {processing_log}")
+        return None 
         
 # System prompt for Gemini
 SYSTEM_PROMPT = """You are a helpful analyst who addresses the statistics database for EU softwood timber exports to global countries in order to answer user's queries. Your knowledge is limited outside this database.
@@ -276,16 +299,69 @@ with st.sidebar:
     if st.session_state.df is not None:
         st.success(f"✅ {len(st.session_state.df):,} records loaded")
         
-        # Data preview toggle
-        if st.checkbox("🔍 Show data preview"):
-            st.dataframe(st.session_state.df.head(20), height=200)
+        # Enhanced data preview toggle
+        if st.checkbox("🔍 Show data details"):
+            
+            # Basic stats
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total Rows", f"{len(st.session_state.df):,}")
+                st.metric("Columns", len(st.session_state.df.columns))
+            with col2:
+                original_indicators = st.session_state.df[st.session_state.df['indicators'].isin(['QUANTITY_IN_100KG', 'VALUE_IN_EUROS'])]
+                st.metric("Original Records", f"{len(original_indicators):,}")
+                st.metric("Calculated Records", f"{len(st.session_state.df) - len(original_indicators):,}")
+            
+            # First and last rows
+            st.write("**📊 First 5 rows:**")
+            st.dataframe(st.session_state.df.head(5), height=200)
+            
+            st.write("**📊 Last 5 rows:**")
+            st.dataframe(st.session_state.df.tail(5), height=200)
             
             # Show unique values for debugging
-            with st.expander("📋 Data Summary"):
-                st.write("**Reporters:**", sorted(st.session_state.df['reporter'].unique().tolist()))
-                st.write("**Partners:**", sorted(st.session_state.df['partner'].unique().tolist()))
-                st.write("**Products:**", sorted(st.session_state.df['product'].unique().tolist()))
-                st.write("**Indicators:**", sorted(st.session_state.df['indicators'].unique().tolist()))
+            with st.expander("📋 Unique Values Summary"):
+                st.write(f"**Reporters ({len(st.session_state.df['reporter'].unique())}):**")
+                st.code(", ".join(sorted(st.session_state.df['reporter'].unique().tolist())))
+                
+                st.write(f"**Partners ({len(st.session_state.df['partner'].unique())}):**")
+                st.code(", ".join(sorted(st.session_state.df['partner'].unique().tolist())))
+                
+                st.write(f"**Products ({len(st.session_state.df['product'].unique())}):**")
+                st.code(", ".join(sorted(st.session_state.df['product'].unique().tolist())))
+                
+                st.write(f"**Indicators ({len(st.session_state.df['indicators'].unique())}):**")
+                st.code(", ".join(sorted(st.session_state.df['indicators'].unique().tolist())))
+                
+                st.write(f"**Time Periods ({len(st.session_state.df['time_period'].unique())}):**")
+                st.code(", ".join(sorted(st.session_state.df['time_period'].unique().tolist())))
+            
+            # Distribution by indicator
+            with st.expander("📈 Records by Indicator Type"):
+                indicator_counts = st.session_state.df['indicators'].value_counts()
+                st.dataframe(indicator_counts)
+            
+            # Check for any issues
+            with st.expander("⚠️ Data Quality Check"):
+                st.write(f"**Missing values:**")
+                missing = st.session_state.df.isnull().sum()
+                st.dataframe(missing[missing > 0] if missing.sum() > 0 else pd.Series({"No missing values": 0}))
+                
+                st.write(f"**Zero values in obs_value:**")
+                zero_count = len(st.session_state.df[st.session_state.df['obs_value'] == 0])
+                st.write(f"{zero_count:,} rows ({zero_count/len(st.session_state.df)*100:.1f}%)")
+                
+                st.write(f"**Negative values in obs_value:**")
+                neg_count = len(st.session_state.df[st.session_state.df['obs_value'] < 0])
+                st.write(f"{neg_count:,} rows")
+
+    # Show processing log
+            with st.expander("🔧 Data Processing Log"):
+                if hasattr(st.session_state, 'processing_log'):
+                    for log_entry in st.session_state.processing_log:
+                        st.text(log_entry)
+                else:
+                    st.info("No processing log available")
     
     st.divider()
     
