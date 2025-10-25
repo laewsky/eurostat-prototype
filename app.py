@@ -191,7 +191,7 @@ def init_gemini():
         st.stop()
     
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-2.5-flash')
+    return genai.GenerativeModel('gemini-2.5-pro')
 
 # Execute code safely
 def execute_code(code_str, df):
@@ -246,7 +246,7 @@ if 'messages' not in st.session_state:
 
 # UI Layout
 st.title("🌲 EU Timber Export Analyst")
-st.markdown("*Powered by Gemini 2.5 Flash | Data from Eurostat COMEXT*")
+st.markdown("*Powered by Gemini 2.5 Pro | Data from Eurostat COMEXT*")
 
 # Sidebar
 with st.sidebar:
