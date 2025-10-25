@@ -135,6 +135,7 @@ def load_and_process_data():
         processing_log.append(f"Found {len(value_rows)} VALUE_IN_EUROS rows")
         
         unit_value_rows = []
+        skipped_records = []
         
         for _, value_row in value_rows.iterrows():
             # Find corresponding CUM_VALUE
@@ -146,7 +147,24 @@ def load_and_process_data():
                 (df['indicators'] == 'CUM_VALUE')
             ]
             
-            if not cum_value_row.empty and cum_value_row.iloc[0]['obs_value'] != 0:
+            if cum_value_row.empty:
+                skipped_records.append({
+                    'reason': 'No matching CUM_VALUE found',
+                    'reporter': value_row['reporter'],
+                    'partner': value_row['partner'],
+                    'product': value_row['product'],
+                    'time_period': value_row['time_period']
+                })
+            elif cum_value_row.iloc[0]['obs_value'] == 0:
+                skipped_records.append({
+                    'reason': 'CUM_VALUE is zero (division by zero avoided)',
+                    'reporter': value_row['reporter'],
+                    'partner': value_row['partner'],
+                    'product': value_row['product'],
+                    'time_period': value_row['time_period'],
+                    'value_in_euros': value_row['obs_value']
+                })
+            else:
                 new_row = value_row.copy()
                 new_row['indicators'] = 'UNIT_VALUE'
                 new_row['obs_value'] = value_row['obs_value'] / cum_value_row.iloc[0]['obs_value']
@@ -156,17 +174,16 @@ def load_and_process_data():
             df = pd.concat([df, pd.DataFrame(unit_value_rows)], ignore_index=True)
             processing_log.append(f"Added {len(unit_value_rows)} UNIT_VALUE rows")
         
+        if skipped_records:
+            processing_log.append(f"⚠️ Skipped {len(skipped_records)} UNIT_VALUE calculations:")
+            for record in skipped_records:
+                processing_log.append(f"  - {record}")
+        
         processing_log.append(f"FINAL: {len(df)} total rows")
         
-        # Store log in session state for debugging
+        # Store skipped records for debugging
         st.session_state.processing_log = processing_log
-        
-        return df
-    
-    except Exception as e:
-        st.error(f"❌ Error loading data: {str(e)}")
-        st.error(f"Processing log: {processing_log}")
-        return None 
+        st.session_state.skipped_unit_values = skipped_records 
         
 # System prompt for Gemini
 SYSTEM_PROMPT = """You are a helpful analyst who addresses the statistics database for EU softwood timber exports to global countries in order to answer user's queries. Your knowledge is limited outside this database.
@@ -362,7 +379,25 @@ with st.sidebar:
                         st.text(log_entry)
                 else:
                     st.info("No processing log available")
-    
+    # Show skipped UNIT_VALUE calculations
+            if hasattr(st.session_state, 'skipped_unit_values') and st.session_state.skipped_unit_values:
+                with st.expander(f"⚠️ Skipped UNIT_VALUE ({len(st.session_state.skipped_unit_values)})"):
+                    st.warning(f"Could not calculate UNIT_VALUE for {len(st.session_state.skipped_unit_values)} record(s)")
+                    for idx, record in enumerate(st.session_state.skipped_unit_values, 1):
+                        st.write(f"**Record {idx}:**")
+                        st.json(record)
+                        
+                        # Show the actual data for this record
+                        if st.session_state.df is not None:
+                            related = st.session_state.df[
+                                (st.session_state.df['reporter'] == record.get('reporter')) &
+                                (st.session_state.df['partner'] == record.get('partner')) &
+                                (st.session_state.df['product'] == record.get('product')) &
+                                (st.session_state.df['time_period'] == record.get('time_period'))
+                            ]
+                            if not related.empty:
+                                st.dataframe(related)
+                                
     st.divider()
     
     col1, col2 = st.columns(2)
