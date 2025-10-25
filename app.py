@@ -305,45 +305,6 @@ with st.sidebar:
         # Enhanced data preview toggle
         if st.checkbox("🔍 Show data details"):
             
-            # Basic stats
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Total Rows", f"{len(st.session_state.df):,}")
-                st.metric("Columns", len(st.session_state.df.columns))
-            with col2:
-                original_indicators = st.session_state.df[st.session_state.df['indicators'].isin(['QUANTITY_IN_100KG', 'VALUE_IN_EUROS'])]
-                st.metric("Original Records", f"{len(original_indicators):,}")
-                st.metric("Calculated Records", f"{len(st.session_state.df) - len(original_indicators):,}")
-            
-            # First and last rows
-            st.write("**📊 First 5 rows:**")
-            st.dataframe(st.session_state.df.head(5), height=200)
-            
-            st.write("**📊 Last 5 rows:**")
-            st.dataframe(st.session_state.df.tail(5), height=200)
-            
-            # Show unique values for debugging
-            with st.expander("📋 Unique Values Summary"):
-                st.write(f"**Reporters ({len(st.session_state.df['reporter'].unique())}):**")
-                st.code(", ".join(sorted(st.session_state.df['reporter'].unique().tolist())))
-                
-                st.write(f"**Partners ({len(st.session_state.df['partner'].unique())}):**")
-                st.code(", ".join(sorted(st.session_state.df['partner'].unique().tolist())))
-                
-                st.write(f"**Products ({len(st.session_state.df['product'].unique())}):**")
-                st.code(", ".join(sorted(st.session_state.df['product'].unique().tolist())))
-                
-                st.write(f"**Indicators ({len(st.session_state.df['indicators'].unique())}):**")
-                st.code(", ".join(sorted(st.session_state.df['indicators'].unique().tolist())))
-                
-                st.write(f"**Time Periods ({len(st.session_state.df['time_period'].unique())}):**")
-                st.code(", ".join(sorted(st.session_state.df['time_period'].unique().tolist())))
-            
-            # Distribution by indicator
-            with st.expander("📈 Records by Indicator Type"):
-                indicator_counts = st.session_state.df['indicators'].value_counts()
-                st.dataframe(indicator_counts)
-            
             # Check for any issues
             with st.expander("⚠️ Data Quality Check"):
                 st.write(f"**Missing values:**")
