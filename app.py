@@ -181,9 +181,17 @@ def load_and_process_data():
         
         processing_log.append(f"FINAL: {len(df)} total rows")
         
-        # Store skipped records for debugging
+        # Store log and skipped records in session state
         st.session_state.processing_log = processing_log
-        st.session_state.skipped_unit_values = skipped_records 
+        st.session_state.skipped_unit_values = skipped_records
+
+        return df
+    
+    except Exception as e:
+        st.error(f"❌ Error loading data: {str(e)}")
+        if processing_log:
+            st.error(f"Processing log: {processing_log}")
+        return None
         
 # System prompt for Gemini
 SYSTEM_PROMPT = """You are a helpful analyst who addresses the statistics database for EU softwood timber exports to global countries in order to answer user's queries. Your knowledge is limited outside this database.
