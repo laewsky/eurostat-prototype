@@ -148,7 +148,7 @@ def load_and_process_data():
 # System prompt for Gemini
 SYSTEM_PROMPT = """You are a helpful analyst who addresses the statistics database for EU softwood timber exports to global countries in order to answer user's queries. Your knowledge is limited outside this database.
 
-When asked, you think first meticulously which rows and cells to look at, and construct a short Python code snippet that will query the dataframe 'df', then provide a natural language response based on the results.
+When asked, you think first meticulously which rows and cells to look at, and construct a short Python code snippet that will query the dataframe 'df'.
 
 Country labels (Reporter - use uppercase codes):
 AT=Austria, BE=Belgium, BG=Bulgaria, CY=Cyprus, CZ=Czech Republic, DE=Germany, DK=Denmark, EE=Estonia, ES=Spain, FI=Finland, FR=France, GB=United Kingdom, GR=Greece, HR=Croatia, HU=Hungary, IE=Ireland, IT=Italy, LT=Lithuania, LU=Luxembourg, LV=Latvia, MT=Malta, NL=Netherlands, PL=Poland, PT=Portugal, RO=Romania, SE=Sweden, SI=Slovenia, SK=Slovakia
@@ -172,18 +172,18 @@ DataFrame columns: reporter, partner, product, indicators, time_period, obs_valu
 IMPORTANT INSTRUCTIONS:
 1. Generate concise Python code using pandas operations on 'df'
 2. Assign results to a variable called 'result'
-3. Wrap code in ```python ... ``` blocks
-4. After showing code, provide a clear natural language interpretation
-5. Use uppercase for reporter, partner, and indicators when filtering
-6. Use string format for product codes (e.g., '440711')
-7. Format numbers nicely in your response (use commas, round decimals)
-8. If data is missing or you can't answer, say so clearly
+3. Use uppercase for reporter, partner, and indicators when filtering
+4. Use string format for product codes (e.g., '440711')
+5. When interpreting results, use ONLY the actual executed result - never make up numbers
+6. If data is missing or you can't answer, say so clearly
+7. When asked about imports or import volumes (and value or tons not mentioned), by default answer about m³ and change only if corrected by user
 
-Example code structure:
+Example code:
 ```python
 result = df[(df['reporter'] == 'DE') & (df['indicators'] == 'CUM_VALUE') & (df['partner'] == 'CN')]['obs_value'].sum()
 ```
 """
+```
 
 # Initialize Gemini
 @st.cache_resource
@@ -356,14 +356,64 @@ if prompt := st.chat_input("💬 Ask about timber exports..."):
     with st.spinner("🔍 Analyzing data..."):
         try:
             chat = st.session_state.model.start_chat(history=[])
-            full_prompt = f"{SYSTEM_PROMPT}\n\nUser question: {prompt}"
-            response = chat.send_message(full_prompt)
             
-            # Process response
-            processed_response = process_ai_response(response.text, st.session_state.df)
+            # Step 1: Get code from AI
+            code_prompt = f"""{SYSTEM_PROMPT}
+
+User question: {prompt}
+
+Generate ONLY the Python code to answer this question. Do not include explanations yet.
+Assign the final result to a variable called 'result'.
+"""
+            code_response = chat.send_message(code_prompt)
             
-            # Add assistant message
-            st.session_state.messages.append({"role": "assistant", "content": processed_response})
+            # Step 2: Extract and execute code
+            code_blocks = re.findall(r'```python\n(.*?)\n```', code_response.text, re.DOTALL)
+            
+            if code_blocks:
+                code = code_blocks[0]
+                execution_result = execute_code(code, st.session_state.df)
+                
+                # Step 3: Ask AI to formulate response using ACTUAL result
+                interpretation_prompt = f"""The code executed successfully and returned this result: {execution_result}
+
+User's question was: {prompt}
+
+Now provide a clear, natural language answer using this EXACT result. Include:
+1. A direct answer to the question
+2. The actual number from the result: {execution_result}
+3. Appropriate units and context
+4. Do NOT make up any numbers - use only the result provided: {execution_result}
+
+Keep it concise and professional."""
+                
+                final_response = chat.send_message(interpretation_prompt)
+                
+                # Format final output
+                if isinstance(execution_result, (int, float)):
+                    if isinstance(execution_result, float):
+                        formatted_result = f"{execution_result:,.2f}"
+                    else:
+                        formatted_result = f"{execution_result:,}"
+                else:
+                    formatted_result = str(execution_result)
+                
+                full_response = f"""<details><summary>📊 View query code</summary>
+
+```python
+{code}
+```
+</details>
+
+💡 **Result:** `{formatted_result}`
+
+{final_response.text}"""
+                
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+            else:
+                # No code generated - direct response
+                direct_response = chat.send_message(f"{SYSTEM_PROMPT}\n\nUser question: {prompt}")
+                st.session_state.messages.append({"role": "assistant", "content": direct_response.text})
             
         except Exception as e:
             error_msg = f"❌ Error: {str(e)}"
