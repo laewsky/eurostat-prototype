@@ -78,18 +78,23 @@ def load_and_process_data():
         # Read CSV
         df = pd.read_csv(StringIO(response.text))
         
-        # Make column names case-insensitive
+        # Make column names case-insensitive (lowercase)
         df.columns = df.columns.str.lower()
         
         # Keep only needed columns
         needed_cols = ['reporter', 'partner', 'product', 'indicators', 'time_period', 'obs_value']
         df = df[[col for col in needed_cols if col in df.columns]]
         
-        # Convert to uppercase for consistency
-        df['reporter'] = df['reporter'].str.upper()
-        df['partner'] = df['partner'].str.upper()
-        df['product'] = df['product'].astype(str)
-        df['indicators'] = df['indicators'].str.upper()
+        # Clean and standardize data
+        df['reporter'] = df['reporter'].astype(str).str.strip().str.upper()
+        df['partner'] = df['partner'].astype(str).str.strip().str.upper()
+        df['product'] = df['product'].astype(str).str.strip()
+        df['indicators'] = df['indicators'].astype(str).str.strip().str.upper()
+        df['time_period'] = df['time_period'].astype(str).str.strip()
+        df['obs_value'] = pd.to_numeric(df['obs_value'], errors='coerce').fillna(0)
+        
+        # Remove any rows with missing critical data
+        df = df.dropna(subset=['reporter', 'partner', 'product', 'indicators', 'time_period'])
         
         # Product multipliers for CUM_VALUE calculation
         multipliers = {
@@ -139,7 +144,7 @@ def load_and_process_data():
     except Exception as e:
         st.error(f"❌ Error loading data: {str(e)}")
         return None
-
+        
 # System prompt for Gemini
 SYSTEM_PROMPT = """You are a helpful analyst who addresses the statistics database for EU softwood timber exports to global countries in order to answer user's queries. Your knowledge is limited outside this database.
 
@@ -209,31 +214,28 @@ def process_ai_response(response_text, df):
     # Find Python code blocks
     code_blocks = re.findall(r'```python\n(.*?)\n```', response_text, re.DOTALL)
     
-    execution_results = []
-    for code in code_blocks:
-        result = execute_code(code, df)
-        if result is not None:
-            execution_results.append(("code", code, result))
-    
-    # Build formatted response
     formatted_response = response_text
     
-    # Optionally inject results inline
-    for code, _, result in execution_results:
-        if isinstance(result, (int, float)):
-            # Fix: Format the number first, then insert
-            if isinstance(result, float):
-                formatted_result = f"{result:,.2f}"
-            else:
-                formatted_result = f"{result:,}"
-            
-            formatted_response = formatted_response.replace(
-                f"```python\n{code}\n```",
-                f"```python\n{code}\n```\n**Result:** `{formatted_result}`"
-            )
+    for code in code_blocks:
+        result = execute_code(code, df)
+        if result is not None and isinstance(result, (int, float)):
+            # Format the result properly
+            try:
+                if isinstance(result, float):
+                    formatted_result = f"{result:,.2f}"
+                else:
+                    formatted_result = f"{result:,}"
+                
+                # Replace code block with collapsible version
+                formatted_response = formatted_response.replace(
+                    f"```python\n{code}\n```",
+                    f"<details><summary>📊 View query code</summary>\n\n```python\n{code}\n```\n</details>\n\n💡 **Result:** `{formatted_result}`"
+                )
+            except:
+                pass
     
     return formatted_response
-
+    
 # Initialize session state
 if 'df' not in st.session_state:
     with st.spinner('📥 Loading Eurostat data...'):
@@ -276,6 +278,17 @@ with st.sidebar:
     
     if st.session_state.df is not None:
         st.success(f"✅ {len(st.session_state.df):,} records loaded")
+        
+        # Data preview toggle
+        if st.checkbox("🔍 Show data preview"):
+            st.dataframe(st.session_state.df.head(20), height=200)
+            
+            # Show unique values for debugging
+            with st.expander("📋 Data Summary"):
+                st.write("**Reporters:**", sorted(st.session_state.df['reporter'].unique().tolist()))
+                st.write("**Partners:**", sorted(st.session_state.df['partner'].unique().tolist()))
+                st.write("**Products:**", sorted(st.session_state.df['product'].unique().tolist()))
+                st.write("**Indicators:**", sorted(st.session_state.df['indicators'].unique().tolist()))
     
     st.divider()
     
@@ -289,7 +302,7 @@ with st.sidebar:
         if st.button("🗑️ Clear", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
-
+            
 # Chat messages
 for message in st.session_state.messages:
     role_class = "user" if message["role"] == "user" else "assistant"
