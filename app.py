@@ -1,0 +1,353 @@
+import streamlit as st
+import pandas as pd
+import requests
+from io import StringIO
+import google.generativeai as genai
+import re
+
+# Page config
+st.set_page_config(
+    page_title="EU Timber Export Analyst",
+    page_icon="🌲",
+    layout="wide"
+)
+
+# Custom CSS
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f5f7fa;
+    }
+    .chat-message {
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        display: flex;
+        flex-direction: column;
+    }
+    .chat-message.user {
+        background-color: #e3f2fd;
+        border-left: 5px solid #2196F3;
+    }
+    .chat-message.assistant {
+        background-color: #f1f8e9;
+        border-left: 5px solid #8bc34a;
+    }
+    .chat-message .message {
+        margin-top: 0.5rem;
+        color: #333;
+        line-height: 1.6;
+    }
+    .chat-message .role {
+        font-weight: 600;
+        color: #555;
+        font-size: 0.9rem;
+    }
+    h1 {
+        color: #1976d2;
+        font-weight: 700;
+    }
+    .stButton > button {
+        background-color: #4CAF50;
+        color: white;
+        border-radius: 5px;
+        border: none;
+        font-weight: 500;
+    }
+    .stButton > button:hover {
+        background-color: #45a049;
+    }
+    code {
+        background-color: #f4f4f4;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Data loading and processing
+@st.cache_data(ttl=3600)
+def load_and_process_data():
+    """Load and process Eurostat data"""
+    url = "https://ec.europa.eu/eurostat/api/comext/dissemination/sdmx/3.0/data/dataflow/ESTAT/ds-045409/1.0/*.*.*.*.*.*?c[freq]=M&c[reporter]=AT,BE,BG,CY,CZ,DE,DK,EE,ES,FI,FR,GB,GR,HR,HU,IE,IT,LT,LU,LV,MT,NL,PL,PT,RO,SE,SI,SK&c[partner]=CN,EG,SA,AE,MA,DZ,JP,KR,IN&c[product]=440711,440712,440713,440714,440719&c[flow]=2&c[indicators]=QUANTITY_IN_100KG,VALUE_IN_EUROS&c[TIME_PERIOD]=2024-01,2024-02,2024-03,2024-04,2024-05,2024-06,2024-07,2024-08,2025-01,2025-02,2025-03,2025-04,2025-05,2025-06,2025-07,2025-08&compress=false&format=csvdata&formatVersion=2.0"
+    
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        # Read CSV
+        df = pd.read_csv(StringIO(response.text))
+        
+        # Make column names case-insensitive
+        df.columns = df.columns.str.lower()
+        
+        # Keep only needed columns
+        needed_cols = ['reporter', 'partner', 'product', 'indicators', 'time_period', 'obs_value']
+        df = df[[col for col in needed_cols if col in df.columns]]
+        
+        # Convert to uppercase for consistency
+        df['reporter'] = df['reporter'].str.upper()
+        df['partner'] = df['partner'].str.upper()
+        df['product'] = df['product'].astype(str)
+        df['indicators'] = df['indicators'].str.upper()
+        
+        # Product multipliers for CUM_VALUE calculation
+        multipliers = {
+            '440711': 0.1888,
+            '440712': 0.2128,
+            '440713': 0.2,
+            '440714': 0.2,
+            '440719': 0.2
+        }
+        
+        # Add CUM_VALUE rows (cubic meters)
+        quantity_rows = df[df['indicators'] == 'QUANTITY_IN_100KG'].copy()
+        quantity_rows['indicators'] = 'CUM_VALUE'
+        quantity_rows['obs_value'] = quantity_rows.apply(
+            lambda row: row['obs_value'] * multipliers.get(str(row['product']), 0.2),
+            axis=1
+        )
+        
+        # Concatenate to have CUM_VALUE available
+        df = pd.concat([df, quantity_rows], ignore_index=True)
+        
+        # Add UNIT_VALUE rows (price per cubic meter)
+        value_rows = df[df['indicators'] == 'VALUE_IN_EUROS'].copy()
+        unit_value_rows = []
+        
+        for _, value_row in value_rows.iterrows():
+            # Find corresponding CUM_VALUE
+            cum_value_row = df[
+                (df['reporter'] == value_row['reporter']) &
+                (df['partner'] == value_row['partner']) &
+                (df['product'] == value_row['product']) &
+                (df['time_period'] == value_row['time_period']) &
+                (df['indicators'] == 'CUM_VALUE')
+            ]
+            
+            if not cum_value_row.empty and cum_value_row.iloc[0]['obs_value'] != 0:
+                new_row = value_row.copy()
+                new_row['indicators'] = 'UNIT_VALUE'
+                new_row['obs_value'] = value_row['obs_value'] / cum_value_row.iloc[0]['obs_value']
+                unit_value_rows.append(new_row)
+        
+        if unit_value_rows:
+            df = pd.concat([df, pd.DataFrame(unit_value_rows)], ignore_index=True)
+        
+        return df
+    
+    except Exception as e:
+        st.error(f"❌ Error loading data: {str(e)}")
+        return None
+
+# System prompt for Gemini
+SYSTEM_PROMPT = """You are a helpful analyst who addresses the statistics database for EU softwood timber exports to global countries in order to answer user's queries. Your knowledge is limited outside this database.
+
+When asked, you think first meticulously which rows and cells to look at, and construct a short Python code snippet that will query the dataframe 'df', then provide a natural language response based on the results.
+
+Country labels (Reporter - use uppercase codes):
+AT=Austria, BE=Belgium, BG=Bulgaria, CY=Cyprus, CZ=Czech Republic, DE=Germany, DK=Denmark, EE=Estonia, ES=Spain, FI=Finland, FR=France, GB=United Kingdom, GR=Greece, HR=Croatia, HU=Hungary, IE=Ireland, IT=Italy, LT=Lithuania, LU=Luxembourg, LV=Latvia, MT=Malta, NL=Netherlands, PL=Poland, PT=Portugal, RO=Romania, SE=Sweden, SI=Slovenia, SK=Slovakia
+
+Species labels (Product - use as strings):
+440711=pine, 440712=spruce and fir, 440713=SPF, 440714=hemlock and fir, 440719=other softwoods
+
+Importing country labels (Partner - use uppercase codes):
+CN=China, EG=Egypt, SA=Saudi Arabia, AE=UAE, MA=Morocco, DZ=Algeria, JP=Japan, KR=South Korea, IN=India
+
+Indicators (use uppercase):
+- QUANTITY_IN_100KG: Export quantity in 100kg units
+- VALUE_IN_EUROS: Export value in euros
+- CUM_VALUE: Cubic meters (calculated from quantity)
+- UNIT_VALUE: Price per cubic meter in EUR/m³ (calculated from value/volume)
+
+The database has stats for all EU countries, all softwood lumber species, exports volume and value to China, Top-5 MENA countries, India, Japan, South Korea; monthly from January 2024 to August 2025.
+
+DataFrame columns: reporter, partner, product, indicators, time_period, obs_value
+
+IMPORTANT INSTRUCTIONS:
+1. Generate concise Python code using pandas operations on 'df'
+2. Assign results to a variable called 'result'
+3. Wrap code in ```python ... ``` blocks
+4. After showing code, provide a clear natural language interpretation
+5. Use uppercase for reporter, partner, and indicators when filtering
+6. Use string format for product codes (e.g., '440711')
+7. Format numbers nicely in your response (use commas, round decimals)
+8. If data is missing or you can't answer, say so clearly
+
+Example code structure:
+```python
+result = df[(df['reporter'] == 'DE') & (df['indicators'] == 'CUM_VALUE') & (df['partner'] == 'CN')]['obs_value'].sum()
+```
+"""
+
+# Initialize Gemini
+@st.cache_resource
+def init_gemini():
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    if not api_key:
+        st.error("⚠️ Please add GEMINI_API_KEY to your Streamlit secrets!")
+        st.stop()
+    
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel('gemini-2.5-flash')
+
+# Execute code safely
+def execute_code(code_str, df):
+    """Safely execute code generated by AI"""
+    try:
+        local_vars = {'df': df, 'pd': pd}
+        exec(code_str, {"__builtins__": {}}, local_vars)
+        if 'result' in local_vars:
+            return local_vars['result']
+        return None
+    except Exception as e:
+        return f"⚠️ Error executing code: {str(e)}"
+
+# Process AI response
+def process_ai_response(response_text, df):
+    """Extract and execute code from AI response"""
+    # Find Python code blocks
+    code_blocks = re.findall(r'```python\n(.*?)\n```', response_text, re.DOTALL)
+    
+    execution_results = []
+    for code in code_blocks:
+        result = execute_code(code, df)
+        if result is not None:
+            execution_results.append(("code", code, result))
+    
+    # Build formatted response
+    formatted_response = response_text
+    
+    # Optionally inject results inline
+    for code, _, result in execution_results:
+        if isinstance(result, (int, float)):
+            formatted_response = formatted_response.replace(
+                f"```python\n{code}\n```",
+                f"```python\n{code}\n```\n**Result:** `{result:,.2f if isinstance(result, float) else result:,}`"
+            )
+    
+    return formatted_response
+
+# Initialize session state
+if 'df' not in st.session_state:
+    with st.spinner('📥 Loading Eurostat data...'):
+        st.session_state.df = load_and_process_data()
+
+if 'model' not in st.session_state:
+    st.session_state.model = init_gemini()
+
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+
+# UI Layout
+st.title("🌲 EU Timber Export Analyst")
+st.markdown("*Powered by Gemini 2.5 Flash | Data from Eurostat COMEXT*")
+
+# Sidebar
+with st.sidebar:
+    st.header("📊 Database Coverage")
+    st.markdown("""
+    **Geographic Coverage:**
+    - 🇪🇺 All EU-27 + UK
+    - 🌍 9 partner countries
+    
+    **Products:**
+    - 🌲 Pine (440711)
+    - 🌲 Spruce & Fir (440712)
+    - 🌲 SPF (440713)
+    - 🌲 Hemlock & Fir (440714)
+    - 🌲 Other softwoods (440719)
+    
+    **Period:**
+    - 📅 Jan 2024 - Aug 2025
+    - 📊 Monthly data
+    
+    **Metrics:**
+    - Volume (100kg, m³)
+    - Value (EUR)
+    - Unit prices (EUR/m³)
+    """)
+    
+    if st.session_state.df is not None:
+        st.success(f"✅ {len(st.session_state.df):,} records loaded")
+    
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.session_state.df = load_and_process_data()
+            st.rerun()
+    with col2:
+        if st.button("🗑️ Clear", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
+
+# Chat messages
+for message in st.session_state.messages:
+    role_class = "user" if message["role"] == "user" else "assistant"
+    role_icon = "👤" if message["role"] == "user" else "🤖"
+    
+    st.markdown(f"""
+        <div class="chat-message {role_class}">
+            <div class="role">{role_icon} {message["role"].title()}</div>
+            <div class="message">{message["content"]}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# Welcome message
+if not st.session_state.messages:
+    st.markdown("""
+        <div class="chat-message assistant">
+            <div class="role">🤖 Assistant</div>
+            <div class="message">
+                Hello! I'm your EU Timber Export Analyst. I can help you analyze softwood timber export statistics from EU countries to major global markets.
+                <br><br>
+                <b>Try asking:</b>
+                <ul>
+                    <li>"What are Germany's total pine exports to China in 2024?"</li>
+                    <li>"Which EU country exported the most spruce to Egypt?"</li>
+                    <li>"Show me average unit prices for Finnish exports to Japan"</li>
+                    <li>"Compare Swedish and Austrian exports to Saudi Arabia"</li>
+                    <li>"What's the trend for Poland's exports in 2024?"</li>
+                </ul>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# Chat input
+if prompt := st.chat_input("💬 Ask about timber exports..."):
+    if st.session_state.df is None:
+        st.error("❌ Data not loaded. Please refresh the page.")
+        st.stop()
+    
+    # Add user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # Display user message
+    st.markdown(f"""
+        <div class="chat-message user">
+            <div class="role">👤 User</div>
+            <div class="message">{prompt}</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Generate AI response
+    with st.spinner("🔍 Analyzing data..."):
+        try:
+            chat = st.session_state.model.start_chat(history=[])
+            full_prompt = f"{SYSTEM_PROMPT}\n\nUser question: {prompt}"
+            response = chat.send_message(full_prompt)
+            
+            # Process response
+            processed_response = process_ai_response(response.text, st.session_state.df)
+            
+            # Add assistant message
+            st.session_state.messages.append({"role": "assistant", "content": processed_response})
+            
+        except Exception as e:
+            error_msg = f"❌ Error: {str(e)}"
+            st.session_state.messages.append({"role": "assistant", "content": error_msg})
+    
+    st.rerun()
