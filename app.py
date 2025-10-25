@@ -179,11 +179,8 @@ IMPORTANT INSTRUCTIONS:
 7. When asked about imports or import volumes (and value or tons not mentioned), by default answer about m³ and change only if corrected by user
 
 Example code:
-```python
-result = df[(df['reporter'] == 'DE') & (df['indicators'] == 'CUM_VALUE') & (df['partner'] == 'CN')]['obs_value'].sum()
-```
+```result = df[(df['reporter'] == 'DE') & (df['indicators'] == 'CUM_VALUE') & (df['partner'] == 'CN')]['obs_value'].sum()```
 """
-```
 
 # Initialize Gemini
 @st.cache_resource
