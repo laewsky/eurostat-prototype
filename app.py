@@ -12,55 +12,335 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS
+# Custom CSS - REPLACE ENTIRE SECTION
 st.markdown("""
     <style>
-    .main {
-        background-color: #f5f7fa;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+    
+    :root {
+        --primary-glow: #00f5ff;
+        --secondary-glow: #ff00ff;
+        --accent-glow: #7000ff;
+        --dark-bg: #0a0a0f;
+        --card-bg: rgba(20, 20, 30, 0.7);
+        --glass-bg: rgba(255, 255, 255, 0.05);
     }
+    
+    * {
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Animated gradient background */
+    .main {
+        background: linear-gradient(135deg, #0a0a0f 0%, #1a0b2e 50%, #0f0a1e 100%);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+        position: relative;
+        overflow-x: hidden;
+    }
+    
+    .main::before {
+        content: '';
+        position: fixed;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: 
+            radial-gradient(circle at 20% 50%, rgba(0, 245, 255, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(255, 0, 255, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 40% 20%, rgba(112, 0, 255, 0.1) 0%, transparent 50%);
+        animation: floating 20s ease-in-out infinite;
+        pointer-events: none;
+        z-index: 0;
+    }
+    
+    @keyframes gradientShift {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    
+    @keyframes floating {
+        0%, 100% { transform: translate(0, 0) rotate(0deg); }
+        33% { transform: translate(30px, -30px) rotate(5deg); }
+        66% { transform: translate(-20px, 20px) rotate(-5deg); }
+    }
+    
+    @keyframes glow {
+        0%, 100% { text-shadow: 0 0 20px var(--primary-glow), 0 0 40px var(--primary-glow); }
+        50% { text-shadow: 0 0 30px var(--secondary-glow), 0 0 60px var(--secondary-glow); }
+    }
+    
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    /* Premium chat messages with glassmorphism */
     .chat-message {
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
+        padding: 2rem;
+        border-radius: 20px;
+        margin-bottom: 1.5rem;
         display: flex;
         flex-direction: column;
+        backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        position: relative;
+        overflow: hidden;
+        animation: slideIn 0.5s ease-out;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
+    
+    .chat-message::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--primary-glow), transparent);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .chat-message:hover::before {
+        opacity: 1;
+    }
+    
+    .chat-message:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 48px rgba(0, 245, 255, 0.2);
+    }
+    
     .chat-message.user {
-        background-color: #e3f2fd;
-        border-left: 5px solid #2196F3;
+        background: linear-gradient(135deg, rgba(0, 245, 255, 0.15) 0%, rgba(0, 200, 255, 0.05) 100%);
+        border-left: 3px solid var(--primary-glow);
     }
+    
     .chat-message.assistant {
-        background-color: #f1f8e9;
-        border-left: 5px solid #8bc34a;
+        background: linear-gradient(135deg, rgba(255, 0, 255, 0.15) 0%, rgba(112, 0, 255, 0.05) 100%);
+        border-left: 3px solid var(--secondary-glow);
     }
+    
     .chat-message .message {
-        margin-top: 0.5rem;
-        color: #333;
-        line-height: 1.6;
+        margin-top: 0.75rem;
+        color: #e0e0e0;
+        line-height: 1.8;
+        font-weight: 300;
+        letter-spacing: 0.3px;
     }
+    
     .chat-message .role {
-        font-weight: 600;
-        color: #555;
-        font-size: 0.9rem;
-    }
-    h1 {
-        color: #1976d2;
         font-weight: 700;
+        background: linear-gradient(135deg, var(--primary-glow), var(--secondary-glow));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
     }
+    
+    /* Animated gradient title */
+    h1 {
+        background: linear-gradient(135deg, #00f5ff 0%, #ff00ff 50%, #7000ff 100%);
+        background-size: 200% 200%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 900;
+        font-size: 3.5rem !important;
+        animation: gradientShift 8s ease infinite, glow 3s ease-in-out infinite;
+        letter-spacing: -2px;
+        margin-bottom: 0 !important;
+    }
+    
+    /* Premium buttons with 3D effect */
     .stButton > button {
-        background-color: #4CAF50;
+        background: linear-gradient(135deg, var(--accent-glow), var(--secondary-glow));
         color: white;
-        border-radius: 5px;
+        border-radius: 15px;
         border: none;
-        font-weight: 500;
+        font-weight: 600;
+        padding: 0.75rem 2rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 15px rgba(112, 0, 255, 0.4);
     }
+    
+    .stButton > button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+        transition: left 0.5s ease;
+    }
+    
+    .stButton > button:hover::before {
+        left: 100%;
+    }
+    
     .stButton > button:hover {
-        background-color: #45a049;
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 8px 30px rgba(112, 0, 255, 0.6),
+                    0 0 40px rgba(255, 0, 255, 0.3);
     }
+    
+    .stButton > button:active {
+        transform: translateY(0) scale(0.98);
+    }
+    
+    /* Premium code blocks */
     code {
-        background-color: #f4f4f4;
-        padding: 2px 6px;
-        border-radius: 3px;
+        background: rgba(0, 245, 255, 0.1);
+        padding: 4px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 245, 255, 0.3);
+        color: var(--primary-glow);
+        font-family: 'Monaco', 'Courier New', monospace;
+        font-size: 0.9em;
+        box-shadow: 0 0 10px rgba(0, 245, 255, 0.2);
+    }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 12px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: rgba(10, 10, 15, 0.5);
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, var(--primary-glow), var(--secondary-glow));
+        border-radius: 10px;
+        border: 2px solid rgba(10, 10, 15, 0.5);
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, var(--secondary-glow), var(--accent-glow));
+        box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+    }
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 15, 0.98) 100%);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid rgba(0, 245, 255, 0.2);
+    }
+    
+    [data-testid="stSidebar"] h2 {
+        color: var(--primary-glow);
+        font-weight: 700;
+        text-shadow: 0 0 20px rgba(0, 245, 255, 0.5);
+    }
+    
+    [data-testid="stSidebar"] .element-container {
+        color: #b0b0b0;
+    }
+    
+    /* Input field styling */
+    .stChatInputContainer {
+        border-top: 1px solid rgba(0, 245, 255, 0.2);
+        background: rgba(20, 20, 30, 0.8);
+        backdrop-filter: blur(20px);
+    }
+    
+    .stChatInput textarea {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(0, 245, 255, 0.3) !important;
+        border-radius: 15px !important;
+        color: #e0e0e0 !important;
+        transition: all 0.3s ease;
+    }
+    
+    .stChatInput textarea:focus {
+        border-color: var(--primary-glow) !important;
+        box-shadow: 0 0 20px rgba(0, 245, 255, 0.3) !important;
+    }
+    
+    /* Success/Error messages */
+    .stSuccess, .stError, .stWarning, .stInfo {
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        border-left-width: 3px;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        border: 1px solid rgba(0, 245, 255, 0.2);
+        color: #e0e0e0;
+        transition: all 0.3s ease;
+    }
+    
+    .streamlit-expanderHeader:hover {
+        background: rgba(0, 245, 255, 0.1);
+        border-color: var(--primary-glow);
+        box-shadow: 0 0 15px rgba(0, 245, 255, 0.2);
+    }
+    
+    /* Details/Summary for code blocks */
+    details {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+        border: 1px solid rgba(0, 245, 255, 0.2);
+        transition: all 0.3s ease;
+    }
+    
+    details:hover {
+        border-color: var(--primary-glow);
+        box-shadow: 0 0 20px rgba(0, 245, 255, 0.2);
+    }
+    
+    summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--primary-glow);
+        user-select: none;
+        transition: all 0.3s ease;
+    }
+    
+    summary:hover {
+        color: var(--secondary-glow);
+        text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+    }
+    
+    /* Dataframe styling */
+    .dataframe {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(0, 245, 255, 0.2);
+    }
+    
+    /* Checkbox styling */
+    .stCheckbox {
+        color: #e0e0e0;
+    }
+    
+    /* Divider */
+    hr {
+        border: none;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--primary-glow), transparent);
+        margin: 2rem 0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -272,7 +552,7 @@ if 'messages' not in st.session_state:
 
 # UI Layout
 st.title("🌲 EU Timber Export Analyst")
-st.markdown("*Powered by Gemini 2.5 Pro | Data from Eurostat COMEXT*")
+st.markdown("<p style='color: rgba(255,255,255,0.6); font-size: 1.1rem; font-weight: 300; margin-top: -1rem; letter-spacing: 1px;'>⚡ Powered by Gemini 2.5 Pro | 🌍 Real-time Eurostat COMEXT Data</p>", unsafe_allow_html=True)
 
 # Sidebar
 with st.sidebar:
@@ -370,21 +650,23 @@ for message in st.session_state.messages:
         </div>
     """, unsafe_allow_html=True)
 
-# Welcome message
+# Welcome message - REPLACE THE WELCOME MESSAGE SECTION
 if not st.session_state.messages:
     st.markdown("""
         <div class="chat-message assistant">
-            <div class="role">🤖 Assistant</div>
+            <div class="role">🤖 AI Assistant</div>
             <div class="message">
-                Hello! I'm your EU Timber Export Analyst. I can help you analyze softwood timber export statistics from EU countries to major global markets.
+                <strong style="font-size: 1.1em; color: var(--primary-glow);">Welcome to the Future of Timber Analytics</strong>
                 <br><br>
-                <b>Try asking:</b>
-                <ul>
-                    <li>"What are Germany's total pine exports to China in 2024?"</li>
-                    <li>"Which EU country exported the most spruce to Egypt?"</li>
-                    <li>"Show me average unit prices for Finnish exports to Japan"</li>
-                    <li>"Compare Swedish and Austrian exports to Saudi Arabia"</li>
-                    <li>"What's the trend for Poland's exports in 2024?"</li>
+                I'm your premium EU Timber Export Analyst, powered by advanced AI. Ready to unlock insights from millions of data points.
+                <br><br>
+                <b style="color: var(--secondary-glow);">🎯 Try these power queries:</b>
+                <ul style="line-height: 2; margin-top: 0.5rem;">
+                    <li>💎 "What are Germany's total pine exports to China in 2024?"</li>
+                    <li>📊 "Which EU country exported the most spruce to Egypt?"</li>
+                    <li>💰 "Show me average unit prices for Finnish exports to Japan"</li>
+                    <li>⚡ "Compare Swedish and Austrian exports to Saudi Arabia"</li>
+                    <li>📈 "What's the trend for Poland's exports in 2024?"</li>
                 </ul>
             </div>
         </div>
