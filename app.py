@@ -747,53 +747,7 @@ with st.sidebar:
     - Value (EUR)
     - Unit prices (EUR/m³)
     """)
-    
-    if st.session_state.df is not None:
-        st.success(f"✅ {len(st.session_state.df):,} records loaded")
-        
-        # Enhanced data preview toggle
-        if st.checkbox("🔍 Show data details"):
-            
-            # Check for any issues
-            with st.expander("⚠️ Data Quality Check"):
-                st.write(f"**Missing values:**")
-                missing = st.session_state.df.isnull().sum()
-                st.dataframe(missing[missing > 0] if missing.sum() > 0 else pd.Series({"No missing values": 0}))
-                
-                st.write(f"**Zero values in obs_value:**")
-                zero_count = len(st.session_state.df[st.session_state.df['obs_value'] == 0])
-                st.write(f"{zero_count:,} rows ({zero_count/len(st.session_state.df)*100:.1f}%)")
-                
-                st.write(f"**Negative values in obs_value:**")
-                neg_count = len(st.session_state.df[st.session_state.df['obs_value'] < 0])
-                st.write(f"{neg_count:,} rows")
-
-    # Show processing log
-            with st.expander("🔧 Data Processing Log"):
-                if hasattr(st.session_state, 'processing_log'):
-                    for log_entry in st.session_state.processing_log:
-                        st.text(log_entry)
-                else:
-                    st.info("No processing log available")
-    # Show skipped UNIT_VALUE calculations
-            if hasattr(st.session_state, 'skipped_unit_values') and st.session_state.skipped_unit_values:
-                with st.expander(f"⚠️ Skipped UNIT_VALUE ({len(st.session_state.skipped_unit_values)})"):
-                    st.warning(f"Could not calculate UNIT_VALUE for {len(st.session_state.skipped_unit_values)} record(s)")
-                    for idx, record in enumerate(st.session_state.skipped_unit_values, 1):
-                        st.write(f"**Record {idx}:**")
-                        st.json(record)
-                        
-                        # Show the actual data for this record
-                        if st.session_state.df is not None:
-                            related = st.session_state.df[
-                                (st.session_state.df['reporter'] == record.get('reporter')) &
-                                (st.session_state.df['partner'] == record.get('partner')) &
-                                (st.session_state.df['product'] == record.get('product')) &
-                                (st.session_state.df['time_period'] == record.get('time_period'))
-                            ]
-                            if not related.empty:
-                                st.dataframe(related)
-                                
+                                    
     st.divider()
     
     col1, col2 = st.columns(2)
