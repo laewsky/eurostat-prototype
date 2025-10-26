@@ -397,6 +397,123 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# JavaScript enhancements - ADD THIS NEW SECTION
+st.components.v1.html("""
+    <script>
+    // Smooth scroll reveal animations
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, observerOptions);
+    
+    // Observe all chat messages
+    setTimeout(() => {
+        document.querySelectorAll('.chat-message').forEach(el => {
+            observer.observe(el);
+        });
+    }, 100);
+    
+    // Parallax effect for background
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+        if (!ticking) {
+            window.requestAnimationFrame(() => {
+                const scrolled = window.pageYOffset;
+                const parallax = document.querySelector('.main::before');
+                if (parallax) {
+                    parallax.style.transform = `translateY(${scrolled * 0.3}px)`;
+                }
+                ticking = false;
+            });
+            ticking = true;
+        }
+    });
+    
+    // Magnetic effect for buttons
+    document.addEventListener('mousemove', (e) => {
+        document.querySelectorAll('.stButton > button').forEach(button => {
+            const rect = button.getBoundingClientRect();
+            const x = e.clientX - rect.left - rect.width / 2;
+            const y = e.clientY - rect.top - rect.height / 2;
+            const distance = Math.sqrt(x * x + y * y);
+            
+            if (distance < 100) {
+                const strength = (100 - distance) / 100;
+                button.style.transform = `translate(${x * strength * 0.2}px, ${y * strength * 0.2}px)`;
+            } else {
+                button.style.transform = 'translate(0, 0)';
+            }
+        });
+    });
+    
+    // Typing indicator for AI responses
+    function typeWriter(element, text, speed = 30) {
+        let i = 0;
+        element.innerHTML = '';
+        const timer = setInterval(() => {
+            if (i < text.length) {
+                element.innerHTML += text.charAt(i);
+                i++;
+            } else {
+                clearInterval(timer);
+            }
+        }, speed);
+    }
+    
+    // Add subtle particle effect on data reveals
+    function createParticle(x, y) {
+        const particle = document.createElement('div');
+        particle.style.cssText = `
+            position: fixed;
+            left: ${x}px;
+            top: ${y}px;
+            width: 4px;
+            height: 4px;
+            background: #c9a96e;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            animation: particleFade 1s ease-out forwards;
+        `;
+        document.body.appendChild(particle);
+        setTimeout(() => particle.remove(), 1000);
+    }
+    
+    // Add particle animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes particleFade {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-50px) scale(0); }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Trigger particles on code execution
+    document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'SUMMARY') {
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    createParticle(
+                        e.clientX + (Math.random() - 0.5) * 50,
+                        e.clientY + (Math.random() - 0.5) * 50
+                    );
+                }, i * 50);
+            }
+        }
+    });
+    </script>
+""", height=0)
+
 # Data loading and processing
 @st.cache_data(ttl=3600)
 def load_and_process_data():
