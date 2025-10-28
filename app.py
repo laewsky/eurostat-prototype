@@ -518,7 +518,7 @@ st.components.v1.html("""
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     """Load and process Eurostat data"""
-    url = "https://ec.europa.eu/eurostat/api/comext/dissemination/sdmx/3.0/data/dataflow/ESTAT/ds-045409/1.0/*.*.*.*.*.*?c[freq]=M&c[reporter]=AT,BE,BG,CY,CZ,DE,DK,EE,ES,FI,FR,GB,GR,HR,HU,IE,IT,LT,LU,LV,MT,NL,PL,PT,RO,SE,SI,SK&c[partner]=CN,EG,SA,AE,MA,DZ,JP,KR,IN&c[product]=440711,440712,440713,440714,440719&c[flow]=2&c[indicators]=QUANTITY_IN_100KG,VALUE_IN_EUROS&c[TIME_PERIOD]=2024-01,2024-02,2024-03,2024-04,2024-05,2024-06,2024-07,2024-08,2025-01,2025-02,2025-03,2025-04,2025-05,2025-06,2025-07,2025-08&compress=false&format=csvdata&formatVersion=2.0"
+    url = "https://ec.europa.eu/eurostat/api/comext/dissemination/sdmx/3.0/data/dataflow/ESTAT/ds-045409/1.0/*.*.*.*.*.*?c[freq]=M&c[reporter]=AT,BE,BG,CY,CZ,DE,DK,EE,ES,FI,FR,GB,GR,HR,HU,IE,IT,LT,LU,LV,MT,NL,PL,PT,RO,SE,SI,SK&c[partner]=CN,EG,SA,AE,MA,DZ,JP,KR,IN&c[product]=440711,440712,440713,440714,440719&c[flow]=2&c[indicators]=QUANTITY_IN_100KG,VALUE_IN_EUROS&c[TIME_PERIOD]=2024-01,2024-02,2024-03,2024-04,2024-05,2024-06,2024-07,2024-08,2024-09,2024-10,2024-11,2024-12,2025-01,2025-02,2025-03,2025-04,2025-05,2025-06,2025-07,2025-08&compress=false&format=csvdata&formatVersion=2.0"
     
     processing_log = []
     
