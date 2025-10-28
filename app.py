@@ -652,6 +652,7 @@ IMPORTANT INSTRUCTIONS:
 5. When interpreting results, use ONLY the actual executed result - never make up numbers
 6. If data is missing or you can't answer, say so clearly
 7. When asked about imports or import volumes (and value or tons not mentioned), by default answer about m³ and change only if corrected by user
+8. When asked about trends, try giving annual or year-to-date numbers and comparisons on a YoY basis, not just random number of recent months
 
 Example code:
 ```result = df[(df['reporter'] == 'DE') & (df['indicators'] == 'CUM_VALUE') & (df['partner'] == 'CN')]['obs_value'].sum()```
@@ -666,7 +667,7 @@ def init_gemini():
         st.stop()
     
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-2.5-pro')
+    return genai.GenerativeModel('gemini-2.5-flash')
 
 # Add this function after the init_gemini() function
 def build_gemini_history(messages):
