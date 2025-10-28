@@ -667,7 +667,7 @@ def init_gemini():
         st.stop()
     
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-2.5-flash')
+    return genai.GenerativeModel('gemini-2.5-pro')
 
 # Add this function after the init_gemini() function
 def build_gemini_history(messages):
